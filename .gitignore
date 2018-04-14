@@ -1,0 +1,5 @@
+cramfs
+kernel
+uboot_spl.bin
+uboot.bin
+merge.ini
