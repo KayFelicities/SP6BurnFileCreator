@@ -3,3 +3,5 @@ kernel
 uboot_spl.bin
 uboot.bin
 merge.ini
+out.bin
+NUC972DF62Y.ini
