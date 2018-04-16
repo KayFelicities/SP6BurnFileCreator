@@ -2,11 +2,18 @@
 sp6 merge
 """
 import os
+import sys
 import configparser
 import ctypes
 import traceback
 import time
 
+if getattr(sys, 'frozen', False):
+    SORTWARE_PATH = sys._MEIPASS
+else:
+    SORTWARE_PATH = os.path.join(os.path.split(os.path.realpath(__file__))[0])
+
+SPL_INI_FILE_PATH_DEFAULT = os.path.join(SORTWARE_PATH, 'NUC972DF62Y.ini')
 CONFIG_FILE = r'./merge.ini'
 
 class ConfigClass():
@@ -41,7 +48,7 @@ class ConfigClass():
         if not self.config.has_option('file1', 'maxlen'):
             self.config['file1']['end_offset'] = '128K'
         if not self.config.has_option('file1', 'head_ini_path'):
-            self.config['file1']['head_ini_path'] = './NUC972DF62Y.ini'
+            self.config['file1']['head_ini_path'] = ''
 
         if not self.config.has_option('file2', 'path'):
             self.config['file2']['path'] = './u-boot.bin'
@@ -130,8 +137,6 @@ class EccClass():
         ecc_section = b'\xff\xff\x00\x00' + b'\xff'*28
         for cnt in range(4):
             bytestring = bytestring_2048[cnt*512:(cnt+1)*512]
-            with open(r'./debug.log', 'ab+') as debug_file:
-                debug_file.write(bytestring)
             ecc_obj = self.dll.get_ecc(4, 1 if cnt == 0 else 0, ctypes.create_string_buffer(bytestring))
             ecc_section += ctypes.string_at(ecc_obj, 8)
         return bytestring_2048 + ecc_section
@@ -148,7 +153,13 @@ def get_spl_head(spl_file_path):
 
     counter = 0
     ddr_content = b''
-    with open(CONFIG.get_spl_ini_path(), 'r') as spl_ini_file:
+    spl_ini_file_path = CONFIG.get_spl_ini_path()
+    if not spl_ini_file_path:
+        print('use default spl ini file')
+        spl_ini_file_path = SPL_INI_FILE_PATH_DEFAULT
+    else:
+        print('spl ini file:', spl_ini_file_path)
+    with open(spl_ini_file_path, 'r') as spl_ini_file:
         while True:
             line = spl_ini_file.readline()
             if not line:
@@ -180,6 +191,7 @@ def merge_file(file_no, merge_file_handle):
     print('file{no}: {path}, offset: {offset}, end: {end}, out file: {out}'\
             .format(no=file_no, path=file_path, offset=file_offset, end=file_end_offset, out=file_out_path))
     if not file_path or not os.path.isfile(file_path):
+        if out_file: out_file.close()
         raise Exception('file{no} not exist, merge abort.'.format(no=file_no))
     if merge_file_handle: merge_file_handle.seek(file_offset)
 

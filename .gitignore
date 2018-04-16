@@ -12,3 +12,7 @@ out_u-boot.bin
 out_uImage.bin
 u-boot-spl.bin
 u-boot.bin
+dist/
+build/
+__pycache__/
+uImage
