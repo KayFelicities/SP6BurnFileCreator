@@ -5,3 +5,10 @@ uboot.bin
 merge.ini
 out.bin
 NUC972DF62Y.ini
+cramfs.img
+out_cramfs.bin
+out_u-boot-spl.bin
+out_u-boot.bin
+out_uImage.bin
+u-boot-spl.bin
+u-boot.bin
