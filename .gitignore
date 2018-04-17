@@ -16,3 +16,4 @@ dist/
 build/
 __pycache__/
 uImage
+flash.bin

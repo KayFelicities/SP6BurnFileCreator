@@ -8,12 +8,16 @@ import ctypes
 import traceback
 import time
 
+VERSION = 'V1.0'
+DATE = '20180416'
+
 if getattr(sys, 'frozen', False):
     SORTWARE_PATH = sys._MEIPASS
 else:
     SORTWARE_PATH = os.path.join(os.path.split(os.path.realpath(__file__))[0])
 
 SPL_INI_FILE_PATH_DEFAULT = os.path.join(SORTWARE_PATH, 'NUC972DF62Y.ini')
+NUCBCH_DLL_PATH_DEFAULT = os.path.join(SORTWARE_PATH, 'nucbch.dll')
 CONFIG_FILE = r'./merge.ini'
 
 class ConfigClass():
@@ -30,16 +34,16 @@ class ConfigClass():
         self.config['file4'] = {}
         self.config.read(CONFIG_FILE)
 
-        if not self.config.has_option('outfile', 'merge_file_path'):
-            self.config['outfile']['merge_file_path'] = ''
+        if not self.config.has_option('outfile', 'merge_file'):
+            self.config['outfile']['merge_file'] = './flash.bin'
         if not self.config.has_option('outfile', 'file1'):
-            self.config['outfile']['file1'] = './out_u-boot-spl.bin'
+            self.config['outfile']['file1'] = ''
         if not self.config.has_option('outfile', 'file2'):
-            self.config['outfile']['file2'] = './out_u-boot.bin'
+            self.config['outfile']['file2'] = ''
         if not self.config.has_option('outfile', 'file3'):
-            self.config['outfile']['file3'] = './out_uImage.bin'
+            self.config['outfile']['file3'] = ''
         if not self.config.has_option('outfile', 'file4'):
-            self.config['outfile']['file4'] = './out_cramfs.bin'
+            self.config['outfile']['file4'] = ''
 
         if not self.config.has_option('file1', 'path'):
             self.config['file1']['path'] = './u-boot-spl.bin'
@@ -81,7 +85,7 @@ class ConfigClass():
 
     def get_out_merge_file_path(self):
         """get_out_merge_file_path"""
-        path = self.config['outfile']['merge_file_path'].replace(' ', '').strip()
+        path = self.config['outfile']['merge_file'].replace(' ', '').strip()
         return os.path.join(path)
 
     def get_out_file_path(self, file_no):
@@ -97,7 +101,7 @@ class ConfigClass():
     def get_file_path(self, file_no):
         """get_file_path"""
         path = self.config['file%d'%file_no]['path'].replace(' ', '').strip()
-        return path
+        return os.path.join(path)
 
     def __get_file_offset(self, file_no, offset_type):
         """__get_file_offset"""
@@ -126,7 +130,7 @@ CONFIG = ConfigClass()
 class EccClass():
     """get ecc"""
     def __init__(self):
-        self.dll = ctypes.CDLL(r'./nucbch.dll')
+        self.dll = ctypes.CDLL(NUCBCH_DLL_PATH_DEFAULT)
 
     def get_page(self, bytestring_2048):
         """get page"""
@@ -241,6 +245,7 @@ def del_outfile():
 
 if __name__ == '__main__':
     tm_start = time.time()
+    print('SP6 Burn Files Merge {ver}({date}).Designed by Kay.'.format(ver=VERSION, date=DATE))
     try:
         main()
     except Exception:
