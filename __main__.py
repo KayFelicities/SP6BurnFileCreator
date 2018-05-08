@@ -8,8 +8,8 @@ import ctypes
 import traceback
 import time
 
-VERSION = 'V1.0'
-DATE = '20180416'
+VERSION = 'V1.1'
+DATE = '20180508'
 
 if getattr(sys, 'frozen', False):
     SORTWARE_PATH = sys._MEIPASS
@@ -34,6 +34,8 @@ class ConfigClass():
         self.config['file4'] = {}
         self.config.read(CONFIG_FILE)
 
+        if not self.config.has_option('outfile', 'ecc_bit'):
+            self.config['outfile']['ecc_bit'] = '4'
         if not self.config.has_option('outfile', 'merge_file'):
             self.config['outfile']['merge_file'] = './flash.bin'
         if not self.config.has_option('outfile', 'file1'):
@@ -81,8 +83,16 @@ class ConfigClass():
 
     def chk_config(self):
         """chk config"""
-        pass
+        ecc_bit = self.config['outfile']['ecc_bit']
+        if not (ecc_bit.isdigit() and int(ecc_bit) in [4, 8]):
+            print('ecc bit[%s] invalid.'%self.config['outfile']['ecc_bit'])
+            os.system('pause')
+            os._exit()
 
+    def get_ecc_bit(self):
+        """get_ecc_bit"""
+        return int(self.config['outfile']['ecc_bit'])
+            
     def get_out_merge_file_path(self):
         """get_out_merge_file_path"""
         path = self.config['outfile']['merge_file'].replace(' ', '').strip()
@@ -131,6 +141,10 @@ class EccClass():
     """get ecc"""
     def __init__(self):
         self.dll = ctypes.CDLL(NUCBCH_DLL_PATH_DEFAULT)
+        self.ecc_bit = CONFIG.get_ecc_bit()
+        if self.ecc_bit not in [4, 8]:
+            raise Exception('ecc bit[%d] invalid.'%self.ecc_bit)
+        # print('ecc type: %dbit'%self.ecc_bit)
 
     def get_page(self, bytestring_2048):
         """get page"""
@@ -138,11 +152,11 @@ class EccClass():
             bytestring_2048 += b'\xff'*2048
             bytestring_2048 = bytestring_2048[:2048]
 
-        ecc_section = b'\xff\xff\x00\x00' + b'\xff'*28
+        ecc_section = (b'\xff\xff\x00\x00' + b'\xff'*28) if self.ecc_bit == 4 else (b'\xff\xff\x00\x00' + b'\xff'*64)
         for cnt in range(4):
             bytestring = bytestring_2048[cnt*512:(cnt+1)*512]
-            ecc_obj = self.dll.get_ecc(4, 1 if cnt == 0 else 0, ctypes.create_string_buffer(bytestring))
-            ecc_section += ctypes.string_at(ecc_obj, 8)
+            ecc_obj = self.dll.get_ecc(self.ecc_bit, 1 if cnt == 0 else 0, ctypes.create_string_buffer(bytestring))
+            ecc_section += ctypes.string_at(ecc_obj, 8 if self.ecc_bit == 4 else 15)
         return bytestring_2048 + ecc_section
 
 def get_spl_head(spl_file_path):
@@ -221,13 +235,14 @@ def merge_file(file_no, merge_file_handle):
 def main():
     """main"""
     out_merge_file_path = CONFIG.get_out_merge_file_path()
+    print('ECC type: %dbit'%CONFIG.get_ecc_bit())
     print('out merge file:', out_merge_file_path)
 
     outfile = open(out_merge_file_path, 'wb') if out_merge_file_path else None
     for cnt in range(1, 5):
         merge_file(cnt, outfile)
     if outfile: outfile.close()
-    print('success')
+    print('success, out merge file:', out_merge_file_path)
 
 
 def del_outfile():
