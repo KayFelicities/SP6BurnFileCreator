@@ -8,17 +8,15 @@ import ctypes
 import traceback
 import time
 
-VERSION = 'V1.2'
-DATE = '20180530'
+VERSION = 'V0.1'
+DATE = '20180601'
 
-if getattr(sys, 'frozen', False):
-    SORTWARE_PATH = sys._MEIPASS
-else:
-    SORTWARE_PATH = os.path.join(os.path.split(os.path.realpath(__file__))[0])
+WORKING_PATH = os.path.split(os.path.abspath(sys.argv[0]))[0]
+SORTWARE_PATH = sys._MEIPASS if getattr(sys, 'frozen', False) else WORKING_PATH
 
 SPL_INI_FILE_PATH_DEFAULT = os.path.join(SORTWARE_PATH, 'NUC972DF62Y.ini')
 NUCBCH_DLL_PATH_DEFAULT = os.path.join(SORTWARE_PATH, 'nucbch.dll')
-CONFIG_FILE = r'./merge.ini'
+CONFIG_FILE = os.path.join(WORKING_PATH, r'burn.ini')
 CONFIG_FILE_CONTENT_DEFAULT = \
 r'''# SP6 Burn Files Merge
 
@@ -224,38 +222,40 @@ def merge_pack_file(infile_no, w_to_file_h):
 
 def main():
     """main"""
-    out_burn_file_path = CONFIG.outfile_cfg('burn_file')
-    out_pack_file_path = CONFIG.outfile_cfg('pack_file')
-    print('ECC {bit}bit'.format(bit=CONFIG.outfile_cfg('ecc_bit')))
-    print('out burn file:', out_burn_file_path)
-    print('out pack file:', out_pack_file_path)
-
-    burnfile = open(out_burn_file_path, 'wb') if out_burn_file_path else None
-    packfile = open(out_pack_file_path, 'wb') if out_pack_file_path else None
-
-
-    if packfile:
-        infile_num = 0
-        infile_size_sum = 0
+    try:
+        out_burn_file_path = CONFIG.outfile_cfg('burn_file')
+        out_pack_file_path = CONFIG.outfile_cfg('pack_file')
+        print('ECC {bit}bit'.format(bit=CONFIG.outfile_cfg('ecc_bit')))
+        print('out burn file:', out_burn_file_path)
+        print('out pack file:', out_pack_file_path)
+        burnfile = open(out_burn_file_path, 'wb') if out_burn_file_path else None
+        packfile = open(out_pack_file_path, 'wb') if out_pack_file_path else None
+        if packfile:
+            infile_num = 0
+            infile_size_sum = 0
+            for cnt in range(1, 10):
+                if not CONFIG.infile_cfg(cnt, 'path'):
+                    break
+                infile_num += 1
+                infile_size_sum += (os.path.getsize(CONFIG.infile_cfg(cnt, 'path')) + 64*1024 - 1)\
+                                    // (64*1024) * (64*1024) # 64k对齐
+            pack_action = 5
+            packfile.write(pack_action.to_bytes(4, 'little'))
+            packfile.write(infile_size_sum.to_bytes(4, 'little'))
+            packfile.write(infile_num.to_bytes(4, 'little'))
+            packfile.write(b'\xff'*4)
         for cnt in range(1, 10):
             if not CONFIG.infile_cfg(cnt, 'path'):
                 break
-            infile_num += 1
-            infile_size_sum += (os.path.getsize(CONFIG.infile_cfg(cnt, 'path')) + 64*1024 - 1)\
-                                 // (64*1024) * (64*1024) # 64k对齐
-        pack_action = 5
-        packfile.write(pack_action.to_bytes(4, 'little'))
-        packfile.write(infile_size_sum.to_bytes(4, 'little'))
-        packfile.write(infile_num.to_bytes(4, 'little'))
-        packfile.write(b'\xff'*4)
-    for cnt in range(1, 10):
-        if not CONFIG.infile_cfg(cnt, 'path'):
-            break
-        if burnfile: merge_burn_file(cnt, burnfile)
-        if packfile: merge_pack_file(cnt, packfile)
-    if burnfile: burnfile.close()
-    if packfile: packfile.close()
-    print('success.')
+            if burnfile: merge_burn_file(cnt, burnfile)
+            if packfile: merge_pack_file(cnt, packfile)
+        return 0
+    except Exception:
+        traceback.print_exc()
+        return -1
+    finally:
+        if burnfile: burnfile.close()
+        if packfile: packfile.close()
 
 
 def del_outfile():
@@ -268,17 +268,30 @@ def del_outfile():
         if os.path.isfile(out_pack_file_path):
             os.remove(out_pack_file_path)
     except Exception:
+        traceback.print_exc()
         print('outfile del failed.')
 
+
 if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        WORKING_PATH = sys.argv[1]
+        if not os.path.isdir(WORKING_PATH):
+            print('ERROR: working path invalid.')
+            sys.exit(1)
+
     tm_start = time.time()
     print('SP6 Burn Files Merge {ver}({date}).Designed by Kay.'.format(ver=VERSION, date=DATE))
-    try:
-        main()
-    except Exception:
-        traceback.print_exc()
+    print('WORKING_PATH:', WORKING_PATH)
+    print('CONFIG_FILE:', CONFIG_FILE)
+    os.chdir(WORKING_PATH)
+    if main() == 0:
+        print('success')
+    else:
+        os.system('color 47')
         print('FAILED')
         del_outfile()
-    finally:
-        print('time use {tm:.1f}s'.format(tm=time.time() - tm_start))
-        os.system('pause')
+        time.sleep(3)
+        os.system('color 07')
+        sys.exit(1)
+    print('time use {tm:.1f}s'.format(tm=time.time() - tm_start))
+    sys.exit(0)
