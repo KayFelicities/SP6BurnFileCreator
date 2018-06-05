@@ -17,3 +17,5 @@ build/
 __pycache__/
 uImage
 flash.bin
+burn.ini
+pack.bin

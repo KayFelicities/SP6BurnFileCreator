@@ -3,6 +3,7 @@ sp6 merge
 """
 import os
 import sys
+import getopt
 import configparser
 import ctypes
 import traceback
@@ -11,12 +12,13 @@ import time
 VERSION = 'V0.1'
 DATE = '20180601'
 
-WORKING_PATH = os.path.split(os.path.abspath(sys.argv[0]))[0]
-SORTWARE_PATH = sys._MEIPASS if getattr(sys, 'frozen', False) else WORKING_PATH
+WORKING_PATH = None
+SOFTWARE_PATH = os.path.join(os.path.split(os.path.abspath(sys.argv[0]))[0])
+SOFTWARE_REAL_PATH = sys._MEIPASS if getattr(sys, 'frozen', False) else SOFTWARE_PATH
 
-SPL_INI_FILE_PATH_DEFAULT = os.path.join(SORTWARE_PATH, 'NUC972DF62Y.ini')
-NUCBCH_DLL_PATH_DEFAULT = os.path.join(SORTWARE_PATH, 'nucbch.dll')
-CONFIG_FILE = os.path.join(WORKING_PATH, r'burn.ini')
+SPL_INI_FILE_PATH_DEFAULT = os.path.join(SOFTWARE_REAL_PATH, 'NUC972DF62Y.ini')
+NUCBCH_DLL_PATH_DEFAULT = os.path.join(SOFTWARE_REAL_PATH, 'nucbch.dll')
+CONFIG_FILE = os.path.join(SOFTWARE_PATH, r'burn.ini')
 CONFIG_FILE_CONTENT_DEFAULT = \
 r'''# SP6 Burn Files Merge
 
@@ -25,33 +27,35 @@ r'''# SP6 Burn Files Merge
 ecc_bit = 4
 
 # 烧片文件
-burn_file = ./flash.bin
+burn_file_name = flash.bin
+burn_file_path = .
 
 # NuWriter烧写文件
-pack_file = ./pack.bin
+pack_file_name = pack.bin
+pack_file_path = .
 
 # 输入文件
 # type: data或uboot, uboot文件可用spl_ini_path项自定义spl头配置文件
 # offset:偏移位置，支持单位B/K/M/G，不带单位默认B
 [file1]
 type = uboot
-path = ./u-boot-spl.bin
+path = u-boot-spl.bin
 offset = 0
 spl_ini_path = 
 
 [file2]
 type = data
-path = ./u-boot.bin
+path = u-boot.bin
 offset = 128K
 
 [file3]
 type = data
-path = ./uImage
+path = uImage
 offset = 1M
 
 [file4]
 type = data
-path = ./cramfs.img
+path = cramfs.img
 offset = 3M
 '''
 class ConfigClass():
@@ -220,11 +224,15 @@ def merge_pack_file(infile_no, w_to_file_h):
         w_to_file_h.write(b'\xff'*4)
         w_to_file_h.write(page_content)
 
-def main():
+def start_create(out_path=''):
     """main"""
     try:
-        out_burn_file_path = CONFIG.outfile_cfg('burn_file')
-        out_pack_file_path = CONFIG.outfile_cfg('pack_file')
+        out_burn_file_path = os.path.join(\
+            out_path if out_path else CONFIG.outfile_cfg('burn_file_path'),\
+            CONFIG.outfile_cfg('burn_file_name'))
+        out_pack_file_path = os.path.join(\
+            out_path if out_path else CONFIG.outfile_cfg('pack_file_path'),\
+            CONFIG.outfile_cfg('pack_file_name'))
         print('ECC {bit}bit'.format(bit=CONFIG.outfile_cfg('ecc_bit')))
         print('out burn file:', out_burn_file_path)
         print('out pack file:', out_pack_file_path)
@@ -258,11 +266,15 @@ def main():
         if packfile: packfile.close()
 
 
-def del_outfile():
+def del_outfile(out_path=''):
     """delete outfile"""
     try:
-        out_burn_file_path = CONFIG.outfile_cfg('burn_file')
-        out_pack_file_path = CONFIG.outfile_cfg('pack_file')
+        out_burn_file_path = os.path.join(\
+            out_path if out_path else CONFIG.outfile_cfg('burn_file_path'),\
+            CONFIG.outfile_cfg('burn_file_name'))
+        out_pack_file_path = os.path.join(\
+            out_path if out_path else CONFIG.outfile_cfg('pack_file_path'),\
+            CONFIG.outfile_cfg('pack_file_name'))
         if os.path.isfile(out_burn_file_path):
             os.remove(out_burn_file_path)
         if os.path.isfile(out_pack_file_path):
@@ -273,25 +285,37 @@ def del_outfile():
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        WORKING_PATH = sys.argv[1]
-        if not os.path.isdir(WORKING_PATH):
-            print('ERROR: working path invalid.')
-            sys.exit(1)
-
-    tm_start = time.time()
-    print('SP6 Burn File Creator {ver}({date}).Designed by Kay.'.format(ver=VERSION, date=DATE))
-    print('WORKING_PATH:', WORKING_PATH)
-    print('CONFIG_FILE:', CONFIG_FILE)
-    os.chdir(WORKING_PATH)
-    if main() == 0:
-        print('success')
+    out_file_path = None
+    opts, args = getopt.gnu_getopt(sys.argv[1:], "o:")
+    if not args:
+        WORKING_PATH = SOFTWARE_PATH
     else:
+        WORKING_PATH = args[0]
+    for op, value in opts:
+        if op == '-o':
+            out_file_path = os.path.abspath(value)
+    try:
+        CONFIG.chk_config()
+        if not os.path.isdir(WORKING_PATH):
+            raise Exception('ERROR: working path{path} invalid.'.format(path=WORKING_PATH))
+        if out_file_path and not os.path.isdir(out_file_path):
+            os.makedirs(out_file_path)
+
+        tm_start = time.time()
+        print('SP6 Burn File Creator {ver}({date}).Designed by Kay.'.format(ver=VERSION, date=DATE))
+        print('WORKING_PATH:', WORKING_PATH)
+        print('CONFIG_FILE:', CONFIG_FILE)
+        os.chdir(WORKING_PATH)
+        if start_create(out_file_path) == 0:
+            print('success')
+        else:
+            raise Exception('!!FAILED!!')
+        print('time use {tm:.1f}s'.format(tm=time.time() - tm_start))
+        sys.exit(0)
+    except Exception:
+        traceback.print_exc()
         os.system('color 47')
-        print('FAILED')
-        del_outfile()
+        del_outfile(out_file_path)
         time.sleep(3)
         os.system('color 07')
         sys.exit(1)
-    print('time use {tm:.1f}s'.format(tm=time.time() - tm_start))
-    sys.exit(0)
