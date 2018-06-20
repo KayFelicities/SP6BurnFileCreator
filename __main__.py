@@ -9,8 +9,8 @@ import ctypes
 import traceback
 import time
 
-VERSION = 'V0.1'
-DATE = '20180601'
+VERSION = 'V0.2'
+DATE = '20180620'
 
 WORKING_PATH = None
 SOFTWARE_PATH = os.path.join(os.path.split(os.path.abspath(sys.argv[0]))[0])
@@ -51,7 +51,7 @@ offset = 128K
 [file3]
 type = data
 path = uImage
-offset = 1M
+offset = 768K
 
 [file4]
 type = data
@@ -170,6 +170,12 @@ def merge_burn_file(infile_no, w_to_file_h):
 
     infile_path = CONFIG.infile_cfg(infile_no, 'path')
     infile_offset = get_offset(CONFIG.infile_cfg(infile_no, 'offset'))
+    if ecc.ecc_bit == 4:
+        infile_offset += infile_offset // 2048 * 64
+    elif ecc.ecc_bit == 8:
+        infile_offset += infile_offset // 2048 * 128
+    else:
+        raise Exception('ecc bit {bit} invalied.'.format(bit=ecc.ecc_bit))
     infile_type = CONFIG.infile_cfg(infile_no, 'type').lower().strip()
     print('burn:infile{no}({path}), type: {type}, offset: {offset}'\
             .format(no=infile_no, path=infile_path, type=infile_type, offset=infile_offset))
