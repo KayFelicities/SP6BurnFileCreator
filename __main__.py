@@ -9,8 +9,8 @@ import ctypes
 import traceback
 import time
 
-VERSION = 'V0.2'
-DATE = '20180620'
+VERSION = 'V0.3'
+DATE = '20181016'
 
 WORKING_PATH = None
 SOFTWARE_PATH = os.path.join(os.path.split(os.path.abspath(sys.argv[0]))[0])
@@ -35,7 +35,7 @@ pack_file_name = pack.bin
 pack_file_path = .
 
 # 输入文件
-# type: data或uboot, uboot文件可用spl_ini_path项自定义spl头配置文件
+# type: data/uboot/env, uboot文件可用spl_ini_path项自定义spl头配置文件
 # offset:偏移位置，支持单位B/K/M/G，不带单位默认B
 [file1]
 type = uboot
@@ -193,6 +193,8 @@ def merge_burn_file(infile_no, w_to_file_h):
             page_content = spl_head + in_file.read(2048 - len(spl_head))
         elif infile_type == 'data':
             page_content = in_file.read(2048)
+        elif infile_type == 'env':
+            page_content = in_file.read(2048)
         else:
             raise Exception('file{no} type {type} invalid, merge abort.'\
                 .format(no=infile_no, type=infile_type))
@@ -217,6 +219,11 @@ def merge_pack_file(infile_no, w_to_file_h):
             spl_head = get_spl_head(infile_path, CONFIG.infile_cfg(infile_no, 'spl_ini_path'))
             page_content = spl_head + in_file.read()
             infile_type_no = 2
+        elif infile_type == 'env':
+            page_content = in_file.read()
+            if len(page_content) < 64 * 1024:
+                page_content += b'\x00'*(64*1024 - len(page_content))
+            infile_type_no = 1
         elif infile_type == 'data':
             page_content = in_file.read()
             infile_type_no = 0
