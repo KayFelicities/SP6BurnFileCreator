@@ -8,6 +8,7 @@ import configparser
 import ctypes
 import traceback
 import time
+import zlib
 
 VERSION = 'V0.3'
 DATE = '20181016'
@@ -79,13 +80,13 @@ class ConfigClass():
 
     def outfile_cfg(self, key):
         """get outfile cfg"""
-        return self.config['outfile'].get(key)
+        return self.config['outfile'].get(key, '')
 
     def infile_cfg(self, file_no, key):
         """get infile cfg"""
         section = 'file' + str(file_no)
         if self.config.has_section(section):
-            return self.config[section].get(key)
+            return self.config[section].get(key, '')
         else:
             return None
 
@@ -164,6 +165,31 @@ def get_offset(offset_str):
         return int(offset_str[:-1]) * 1024 * 1024 * 1024
     return int(offset_str)
 
+
+def get_w_content(infile_no, infile_type):
+    """get env file content"""
+    infile_path = CONFIG.infile_cfg(infile_no, 'path')
+    if infile_type == 'env':
+        with open(infile_path, 'rb') as in_file:
+            w_content = in_file.read().replace(b'\x0d\x0a', b'\x00')
+        if len(w_content) < 64 * 1024 - 4:
+            w_content += b'\x00'*(64*1024 - 4 - len(w_content))
+        w_content = zlib.crc32(w_content).to_bytes(4, 'little') + w_content
+    elif infile_type == 'uboot':
+        spl_head = get_spl_head(infile_path, CONFIG.infile_cfg(infile_no, 'spl_ini_path'))
+        in_file = open(infile_path, 'rb')
+        w_content = spl_head + in_file.read()
+        in_file.close()
+    elif infile_type == 'data':
+        in_file = open(infile_path, 'rb')
+        w_content = in_file.read()
+        in_file.close()
+    else:
+        raise Exception('file[{no}] type {type} invalid, merge abort.'\
+            .format(no=infile_no, type=infile_type))
+    return w_content
+
+
 def merge_burn_file(infile_no, w_to_file_h):
     """merge file"""
     ecc = EccClass()
@@ -187,21 +213,11 @@ def merge_burn_file(infile_no, w_to_file_h):
         w_to_file_h.write(b'\xff')
     print('fill ', w_file_pos, '~', infile_offset)
 
-    with open(infile_path, 'rb') as in_file:
-        if infile_type == 'uboot':
-            spl_head = get_spl_head(infile_path, CONFIG.infile_cfg(infile_no, 'spl_ini_path'))
-            page_content = spl_head + in_file.read(2048 - len(spl_head))
-        elif infile_type == 'data':
-            page_content = in_file.read(2048)
-        elif infile_type == 'env':
-            page_content = in_file.read(2048)
-        else:
-            raise Exception('file{no} type {type} invalid, merge abort.'\
-                .format(no=infile_no, type=infile_type))
-        while page_content:
-            page_to_write = ecc.get_page(page_content)
-            w_to_file_h.write(page_to_write)
-            page_content = in_file.read(2048)
+    w_content = get_w_content(infile_no, infile_type)
+    for cnt in range(0, len(w_content), 2048):
+        page_content = w_content[cnt: cnt + 2048]
+        page_to_write = ecc.get_page(page_content)
+        w_to_file_h.write(page_to_write)
 
 
 def merge_pack_file(infile_no, w_to_file_h):
@@ -214,28 +230,15 @@ def merge_pack_file(infile_no, w_to_file_h):
     if not infile_path or not os.path.isfile(infile_path):
         raise Exception('file{no} not exist, merge abort.'.format(no=infile_no))
 
-    with open(infile_path, 'rb') as in_file:
-        if infile_type == 'uboot':
-            spl_head = get_spl_head(infile_path, CONFIG.infile_cfg(infile_no, 'spl_ini_path'))
-            page_content = spl_head + in_file.read()
-            infile_type_no = 2
-        elif infile_type == 'env':
-            page_content = in_file.read()
-            if len(page_content) < 64 * 1024:
-                page_content += b'\x00'*(64*1024 - len(page_content))
-            infile_type_no = 1
-        elif infile_type == 'data':
-            page_content = in_file.read()
-            infile_type_no = 0
-        else:
-            raise Exception('file{no} type {type} invalid, merge abort.'\
-                .format(no=infile_no, type=infile_type))
-        infile_len = len(page_content)
-        w_to_file_h.write(infile_len.to_bytes(4, 'little'))
-        w_to_file_h.write(infile_offset.to_bytes(4, 'little'))
-        w_to_file_h.write(infile_type_no.to_bytes(4, 'little'))
-        w_to_file_h.write(b'\xff'*4)
-        w_to_file_h.write(page_content)
+    infile_type_no = {'data': 0, 'env': 1, 'uboot': 2}.get(infile_type)
+    w_content = get_w_content(infile_no, infile_type)
+    infile_len = len(w_content)
+    w_to_file_h.write(infile_len.to_bytes(4, 'little'))
+    w_to_file_h.write(infile_offset.to_bytes(4, 'little'))
+    w_to_file_h.write(infile_type_no.to_bytes(4, 'little'))
+    w_to_file_h.write(b'\xff'*4)
+    w_to_file_h.write(w_content)
+
 
 def start_create(out_path=''):
     """main"""
