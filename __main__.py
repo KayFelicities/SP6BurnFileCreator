@@ -10,14 +10,14 @@ import traceback
 import time
 import zlib
 
-VERSION = 'V0.3'
-DATE = '20181016'
+VERSION = 'V0.4'
+DATE = '20181106'
 
 WORKING_PATH = None
 SOFTWARE_PATH = os.path.join(os.path.split(os.path.abspath(sys.argv[0]))[0])
 SOFTWARE_REAL_PATH = sys._MEIPASS if getattr(sys, 'frozen', False) else SOFTWARE_PATH
 
-SPL_INI_FILE_PATH_DEFAULT = os.path.join(SOFTWARE_REAL_PATH, 'NUC972DF62Y.ini')
+SPL_INI_FILE_PATH_DEFAULT = os.path.join(SOFTWARE_REAL_PATH, 'SCM601L216UE.ini')
 NUCBCH_DLL_PATH_DEFAULT = os.path.join(SOFTWARE_REAL_PATH, 'nucbch.dll')
 CONFIG_FILE = os.path.join(SOFTWARE_PATH, r'burn.ini')
 CONFIG_FILE_CONTENT_DEFAULT = \
